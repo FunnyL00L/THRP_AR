@@ -345,11 +345,12 @@ function MarkerARViewer({
           (decodedText, result: any) => {
             const box = result.decodedResult?.itemSelection;
             if (box) {
-              setQrPos({
-                x: (box.left + box.right) / 2,
-                y: (box.top + box.bottom) / 2,
-                size: Math.max(box.right - box.left, box.bottom - box.top)
-              });
+              // Calculate center and size of the QR code
+              const x = (box.left + box.right) / 2;
+              const y = (box.top + box.bottom) / 2;
+              const size = Math.max(box.right - box.left, box.bottom - box.top);
+              
+              setQrPos({ x, y, size });
               setIsScanning(false);
             }
           },
@@ -805,26 +806,31 @@ export default function App() {
             </button>
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <HelpCircle size={24} className="text-blue-400" />
-              Panduan AR
+              Panduan TRHP AR
             </h2>
-            <ul className="text-zinc-300 space-y-4 text-sm">
-              <li className="flex flex-col gap-1">
-                <strong className="text-white">1. Deteksi Permukaan</strong> 
-                <span>Gerakkan kamera perlahan. Dekatkan atau jauhkan perangkat ke lantai/meja hingga muncul garis biru (reticle).</span>
-              </li>
-              <li className="flex flex-col gap-1">
-                <strong className="text-white">2. Buat Area</strong> 
-                <span>Ketuk layar untuk titik pertama, lalu mundur perlahan untuk menggambar area. Ketuk lagi saat bar Kesiapan Area berwarna hijau (100%).</span>
-              </li>
-              <li className="flex flex-col gap-1">
-                <strong className="text-white">3. Ganti Objek Langsung</strong> 
-                <span>Setelah area terbentuk, gunakan panah di bawah untuk menukar objek 3D. Objek akan langsung berubah tanpa perlu menggambar area lagi.</span>
-              </li>
-              <li className="flex flex-col gap-1">
-                <strong className="text-white">4. Rotasi Objek</strong> 
-                <span>Geser layar ke kiri atau kanan untuk merotasi objek. Ketuk objek untuk melihat informasi.</span>
-              </li>
-            </ul>
+            <div className="space-y-6">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl">
+                <h3 className="text-emerald-400 text-sm font-bold mb-2 flex items-center gap-2">
+                  <Bone size={16} /> Mode Play Area (AR)
+                </h3>
+                <ul className="text-zinc-300 space-y-2 text-[11px]">
+                  <li>• Gerakkan kamera hingga muncul garis biru (reticle).</li>
+                  <li>• Ketuk layar untuk mulai menggambar area di lantai.</li>
+                  <li>• Mundur perlahan hingga bar Kesiapan Area 100%.</li>
+                </ul>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
+                <h3 className="text-amber-400 text-sm font-bold mb-2 flex items-center gap-2">
+                  <Scan size={16} /> Mode Marker (Scan QR)
+                </h3>
+                <ul className="text-zinc-300 space-y-2 text-[11px]">
+                  <li>• Gunakan jika perangkat tidak mendukung Play Area.</li>
+                  <li>• Arahkan kamera ke QR Code yang tersedia.</li>
+                  <li>• Objek akan langsung muncul di atas QR Code tersebut.</li>
+                </ul>
+              </div>
+            </div>
             <button 
               onClick={() => setShowInfo(false)}
               className="w-full mt-6 py-3 bg-white text-black font-semibold rounded-xl"
@@ -877,12 +883,23 @@ export default function App() {
             <p className="text-zinc-400 text-sm mb-6 text-center font-medium">by Pandora</p>
             <p className="text-zinc-400 mb-8 text-center max-w-xs">Eksplorasi peninggalan prasejarah Bali dalam wujud tiga dimensi.</p>
             
-            {isARSupported === false && (
+            {isARSupported === true ? (
+              <div className="mb-8 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <p className="text-emerald-400 text-xs text-center leading-relaxed font-medium">
+                  ✨ Perangkat mendukung Fitur Play Area.<br/>
+                  <span className="text-white">Gunakan permukaan lantai untuk memunculkan objek.</span>
+                </p>
+              </div>
+            ) : isARSupported === false ? (
               <div className="mb-8 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <p className="text-amber-400 text-xs text-center leading-relaxed font-medium">
-                  ⚠️ Perangkat Anda tidak mendukung AR Kamera.<br/>
-                  <span className="text-white">Silahkan scan QR yang ada pada About AR</span> untuk menggunakan Mode Marker.
+                  ⚠️ Perangkat tidak mendukung Fitur Play Area.<br/>
+                  <span className="text-white">Silahkan scan QR yang ada pada About AR</span> untuk memunculkan objek 3D.
                 </p>
+              </div>
+            ) : (
+              <div className="mb-8 h-[52px] flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
               </div>
             )}
 
@@ -930,12 +947,12 @@ export default function App() {
               >
                 {isARSupported === false ? <Scan size={20} /> : <Bone size={20} />}
                 {isARSupported === false 
-                  ? 'Mode Marker (Scan QR)' 
+                  ? 'Scan QR Marker' 
                   : !selectedEra 
                     ? 'Pilih Era Dulu' 
                     : filteredArData.length === 0 
                       ? 'Data Kosong' 
-                      : 'Mulai AR'}
+                      : 'Mulai Play Area AR'}
               </button>
               
               {isARSupported === false && (
