@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef, useEffect, Suspense, Component, ReactNode, useMemo } from 'react';
+import React, { useState, useRef, useEffect, Suspense, Component, ReactNode, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { XR, createXRStore, useXRHitTest, useXRInputSourceEvent, XRDomOverlay } from '@react-three/xr';
 import { OrbitControls, Environment, Line, useGLTF, useProgress } from '@react-three/drei';
@@ -26,15 +26,10 @@ interface ModelData {
   img_cover: string;
 }
 
-// Error Boundary
-class ErrorBoundary extends Component<{fallback: ReactNode, children: ReactNode}, {hasError: boolean}> {
-  state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  render() {
-    if (this.state.hasError) return this.props.fallback;
-    return this.props.children;
-  }
-}
+// Error Boundary Placeholder
+const ErrorBoundary = ({ children }: { children: any, fallback: any }) => {
+  return <>{children}</>;
+};
 
 function GLBModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
