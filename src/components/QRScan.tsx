@@ -53,11 +53,18 @@ function QRTracker({
   const [targetScale, setTargetScale] = useState(1);
   const [isVisible, setIsVisible] = useState(false);
   
-  const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'));
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  
+  useEffect(() => {
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement('canvas');
+    }
+  }, []);
+
   const lastDetectionTime = useRef(0);
 
   useFrame(() => {
-    if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) return;
+    if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA || !canvasRef.current) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -175,10 +182,21 @@ export default function QRScan({
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const startX = e.touches[0].clientX;
+    const startY = e.touches[0].clientY;
     const startRotY = rotationY;
     
     const handleTouchMove = (moveEvent: TouchEvent) => {
       const deltaX = moveEvent.touches[0].clientX - startX;
+      const deltaY = moveEvent.touches[0].clientY - startY;
+
+      // Jika swipe ke bawah secara signifikan, kembali ke dashboard
+      if (deltaY > 150) {
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+        onClose();
+        return;
+      }
+
       setRotationY(startRotY + deltaX * 0.01);
     };
 
@@ -213,7 +231,7 @@ export default function QRScan({
             <Environment preset="city" />
             
             <QRTracker 
-              qrData={currentModel.id} // QR harus berisi ID model
+              qrData="TRHP-AR-MARKER" // Menggunakan marker tunggal untuk semua model
               modelUrl={currentModel.file_url}
               rotationY={rotationY}
               videoRef={videoRef}
@@ -229,13 +247,13 @@ export default function QRScan({
         {/* Top Bar */}
         <div className="p-6 flex justify-between items-start pointer-events-auto">
           <div className="bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 text-white shadow-lg">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isDetected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
               <span className="text-xs font-medium uppercase tracking-wider">
-                {isDetected ? 'QR Terdeteksi' : 'Mencari QR...'}
+                {isDetected ? 'Marker Terdeteksi' : 'Mencari Marker...'}
               </span>
             </div>
-            <p className="text-[10px] text-zinc-400 mt-1">Arahkan kamera ke QR Code model: <span className="text-white font-bold">{currentModel.name}</span></p>
+            <p className="text-[10px] text-zinc-400 mt-1">Arahkan kamera ke Master QR Code untuk memunculkan: <span className="text-white font-bold">{currentModel.name}</span></p>
           </div>
 
           <button
