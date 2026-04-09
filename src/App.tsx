@@ -7,8 +7,9 @@ import { useState, useRef, useEffect, Suspense, Component, ReactNode, useMemo } 
 import { Canvas } from '@react-three/fiber';
 import { XR, createXRStore, useXRHitTest, useXRInputSourceEvent, XRDomOverlay } from '@react-three/xr';
 import { OrbitControls, Environment, Line, useGLTF, useProgress } from '@react-three/drei';
-import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause } from 'lucide-react';
+import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause, QrCode, Monitor } from 'lucide-react';
 import * as THREE from 'three';
+import { QRCodeCanvas } from 'qrcode.react';
 
 // Data Interface
 interface ModelData {
@@ -165,8 +166,16 @@ function ReticleAndPlacement({
     <>
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} matrixAutoUpdate={false} renderOrder={1000}>
         <ringGeometry args={[0.05, 0.08, 32]} />
-        <meshBasicMaterial color="white" opacity={0.8} transparent depthTest={false} depthWrite={false} />
+        <meshBasicMaterial color="#06b6d4" opacity={0.8} transparent depthTest={false} depthWrite={false} />
       </mesh>
+
+      {/* Permanent ring under the object after placement */}
+      {playArea && objectPosition && (
+        <mesh position={[objectPosition.x, objectPosition.y + 0.001, objectPosition.z]} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.05, 0.06, 32]} />
+          <meshBasicMaterial color="#06b6d4" opacity={0.5} transparent />
+        </mesh>
+      )}
 
       {linePoints.length > 0 && (
         <Line points={linePoints} color="#06b6d4" lineWidth={4} transparent depthTest={false} depthWrite={false} renderOrder={1000} />
@@ -291,7 +300,8 @@ export default function App() {
   const [readiness, setReadiness] = useState(0);
   const [rotationY, setRotationY] = useState(0);
   const [infoModal, setInfoModal] = useState<ModelData | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar'>('dashboard');
+  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar' | 'viewer'>('dashboard');
+  const [showQRCode, setShowQRCode] = useState(false);
 
   const [isSwiping, setIsSwiping] = useState(false);
   const [touchStartX, setTouchStartX] = useState(0);
@@ -388,190 +398,218 @@ export default function App() {
     );
   }
 
+  const appUrl = typeof window !== 'undefined' ? window.location.href : '';
+
   return (
-    <div className={`relative w-full h-screen overflow-hidden font-sans ${currentScreen === 'ar' ? 'bg-transparent' : 'bg-zinc-900'}`}>
-      <Canvas className="w-full h-full" camera={{ position: [0, 0, 2], near: 0.001, far: 100 }}>
-        <XR store={store}>
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[10, 10, 10]} intensity={1} />
-          <Environment preset="city" />
-          
-          <ReticleAndPlacement 
-            objectIndex={objectIndex} 
-            setInstruction={setInstruction} 
-            setReadiness={setReadiness}
-            rotationY={rotationY}
-            setInfoModal={setInfoModal}
-            arData={filteredArData}
-          />
-          
-          <XRDomOverlay className="absolute inset-0 w-full h-full pointer-events-none">
-            
-            <div 
-              className={`absolute inset-0 z-0 ${readiness >= 100 ? 'pointer-events-auto' : 'pointer-events-none'}`}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onTouchCancel={handleTouchEnd}
-            />
-
-            <div className="absolute top-6 left-6 flex flex-col gap-3 pointer-events-auto w-48 z-10">
-              <div className="bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-white uppercase tracking-wider">Kesiapan Area</span>
-                  <span className="text-xs font-mono text-zinc-300">{Math.round(readiness)}%</span>
-                </div>
-                <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-300 ${readiness >= 100 ? 'bg-emerald-500' : readiness > 30 ? 'bg-amber-500' : 'bg-blue-500'}`}
-                    style={{ width: `${readiness}%` }}
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowInfo(true)}
-                className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/20 transition-all shadow-lg w-fit"
-              >
-                <HelpCircle size={18} />
-                <span className="text-sm font-medium">Tutorial</span>
-              </button>
-            </div>
-
-            <div className="absolute top-6 right-6 pointer-events-auto z-10">
-              <button
-                onClick={() => window.location.reload()}
-                className="flex items-center gap-2 bg-red-500/80 backdrop-blur-md px-4 py-2 rounded-xl border border-red-400/30 text-white hover:bg-red-500 transition-all shadow-lg"
-              >
-                <X size={18} />
-                <span className="text-sm font-medium">Keluar</span>
-              </button>
-            </div>
-
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full border border-white/20 text-center text-sm max-w-[50%] pointer-events-auto shadow-lg z-10">
-              {instruction}
-            </div>
-
-            <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none z-10">
+    <div className={`relative w-full h-screen overflow-hidden font-sans ${currentScreen === 'ar' || currentScreen === 'viewer' ? 'bg-transparent' : 'bg-zinc-900'}`}>
+      
+      {(currentScreen === 'ar' || currentScreen === 'viewer') && (
+        <Canvas className="w-full h-full" camera={{ position: [0, 1, 2], near: 0.001, far: 100 }}>
+          {currentScreen === 'ar' ? (
+            <XR store={store}>
+              <ambientLight intensity={0.5} />
+              <directionalLight position={[10, 10, 10]} intensity={1} />
+              <Environment preset="city" />
               
-              {readiness >= 100 && filteredArData.length > 0 && (
-                <button
-                  onClick={() => {
-                    setInfoModal(filteredArData[objectIndex]);
-                  }}
-                  className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg flex items-center gap-2 pointer-events-auto"
-                >
-                  <Info size={18} className="text-blue-400" />
-                  <span className="text-sm font-medium">Informasi Objek</span>
-                </button>
-              )}
+              <ReticleAndPlacement 
+                objectIndex={objectIndex} 
+                setInstruction={setInstruction} 
+                setReadiness={setReadiness}
+                rotationY={rotationY}
+                setInfoModal={setInfoModal}
+                arData={filteredArData}
+              />
+              
+              <XRDomOverlay className="absolute inset-0 w-full h-full pointer-events-none">
+                <div 
+                  className={`absolute inset-0 z-0 ${readiness >= 100 ? 'pointer-events-auto' : 'pointer-events-none'}`}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                />
 
-              {filteredArData.length > 0 && (
-                <div className="bg-black/60 backdrop-blur-md p-2 rounded-2xl flex items-center gap-2 pointer-events-auto border border-white/10 shadow-2xl">
-                  <button
-                    onClick={handlePrevObject}
-                    className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors"
-                    aria-label="Objek Sebelumnya"
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-                  
-                  <div className="w-16 h-16 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden border border-white/20">
-                    <img 
-                      src={filteredArData[objectIndex].img_cover} 
-                      alt="Icon" 
-                      className="w-full h-full object-cover"
-                      crossOrigin="anonymous"
-                      onError={(e) => { 
-                        e.currentTarget.style.display = 'none'; 
-                        e.currentTarget.parentElement?.classList.add('fallback-icon');
-                      }}
-                    />
-                    <style>{`.fallback-icon::after { content: 'No Image'; font-size: 10px; color: #9ca3af; }`}</style>
+                <div className="absolute top-6 left-6 flex flex-col gap-3 pointer-events-auto w-48 z-10">
+                  <div className="bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-semibold text-white uppercase tracking-wider">Kesiapan Area</span>
+                      <span className="text-xs font-mono text-zinc-300">{Math.round(readiness)}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${readiness >= 100 ? 'bg-emerald-500' : readiness > 30 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                        style={{ width: `${readiness}%` }}
+                      />
+                    </div>
                   </div>
 
                   <button
-                    onClick={handleNextObject}
-                    className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors"
-                    aria-label="Objek Selanjutnya"
+                    onClick={() => setShowInfo(true)}
+                    className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/20 transition-all shadow-lg w-fit"
                   >
-                    <ChevronRight size={24} />
+                    <HelpCircle size={18} />
+                    <span className="text-sm font-medium">Tutorial</span>
                   </button>
                 </div>
-              )}
+
+                <div className="absolute top-6 right-6 pointer-events-auto z-10">
+                  <button
+                    onClick={() => setCurrentScreen('dashboard')}
+                    className="flex items-center gap-2 bg-red-500/80 backdrop-blur-md px-4 py-2 rounded-xl border border-red-400/30 text-white hover:bg-red-500 transition-all shadow-lg"
+                  >
+                    <X size={18} />
+                    <span className="text-sm font-medium">Keluar</span>
+                  </button>
+                </div>
+
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full border border-white/20 text-center text-sm max-w-[50%] pointer-events-auto shadow-lg z-10">
+                  {instruction}
+                </div>
+
+                <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none z-10">
+                  {readiness >= 100 && filteredArData.length > 0 && (
+                    <button
+                      onClick={() => setInfoModal(filteredArData[objectIndex])}
+                      className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg flex items-center gap-2 pointer-events-auto"
+                    >
+                      <Info size={18} className="text-blue-400" />
+                      <span className="text-sm font-medium">Informasi Objek</span>
+                    </button>
+                  )}
+
+                  {filteredArData.length > 0 && (
+                    <div className="bg-black/60 backdrop-blur-md p-2 rounded-2xl flex items-center gap-2 pointer-events-auto border border-white/10 shadow-2xl">
+                      <button onClick={handlePrevObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
+                        <ChevronLeft size={24} />
+                      </button>
+                      <div className="w-16 h-16 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden border border-white/20">
+                        <img src={filteredArData[objectIndex].img_cover} alt="Icon" className="w-full h-full object-cover" crossOrigin="anonymous" />
+                      </div>
+                      <button onClick={handleNextObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
+                        <ChevronRight size={24} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </XRDomOverlay>
+            </XR>
+          ) : (
+            <>
+              <ambientLight intensity={0.8} />
+              <directionalLight position={[10, 10, 10]} intensity={1.5} />
+              <Environment preset="city" />
+              <Suspense fallback={null}>
+                <group rotation={[0, rotationY, 0]}>
+                  <GLBModel url={filteredArData[objectIndex].file_url} />
+                </group>
+              </Suspense>
+              <OrbitControls makeDefault />
+              
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-6 right-6 pointer-events-auto">
+                  <button
+                    onClick={() => setCurrentScreen('dashboard')}
+                    className="flex items-center gap-2 bg-red-500/80 backdrop-blur-md px-4 py-2 rounded-xl border border-red-400/30 text-white hover:bg-red-500 transition-all shadow-lg"
+                  >
+                    <X size={18} />
+                    <span className="text-sm font-medium">Tutup Viewer</span>
+                  </button>
+                </div>
+                
+                <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none">
+                  <button
+                    onClick={() => setInfoModal(filteredArData[objectIndex])}
+                    className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg flex items-center gap-2 pointer-events-auto"
+                  >
+                    <Info size={18} className="text-blue-400" />
+                    <span className="text-sm font-medium">Informasi Objek</span>
+                  </button>
+
+                  <div className="bg-black/60 backdrop-blur-md p-2 rounded-2xl flex items-center gap-2 pointer-events-auto border border-white/10 shadow-2xl">
+                    <button onClick={handlePrevObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
+                      <ChevronLeft size={24} />
+                    </button>
+                    <div className="w-16 h-16 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden border border-white/20">
+                      <img src={filteredArData[objectIndex].img_cover} alt="Icon" className="w-full h-full object-cover" crossOrigin="anonymous" />
+                    </div>
+                    <button onClick={handleNextObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
+                      <ChevronRight size={24} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </Canvas>
+      )}
+
+      {showInfo && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 pointer-events-auto">
+          <div className="bg-zinc-900 border border-white/10 p-6 rounded-2xl max-w-sm w-full relative shadow-2xl">
+            <button
+              onClick={() => setShowInfo(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors"
+            >
+              <X size={24} />
+            </button>
+            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <HelpCircle size={24} className="text-blue-400" />
+              Panduan AR
+            </h2>
+            <ul className="text-zinc-300 space-y-4 text-sm">
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">1. Deteksi Permukaan</strong> 
+                <span>Gerakkan kamera perlahan. Dekatkan atau jauhkan perangkat ke lantai/meja hingga muncul garis biru (reticle).</span>
+              </li>
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">2. Buat Area</strong> 
+                <span>Ketuk layar untuk titik pertama, lalu mundur perlahan untuk menggambar area. Ketuk lagi saat bar Kesiapan Area berwarna hijau (100%).</span>
+              </li>
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">3. Ganti Objek Langsung</strong> 
+                <span>Setelah area terbentuk, gunakan panah di bawah untuk menukar objek 3D. Objek akan langsung berubah tanpa perlu menggambar area lagi.</span>
+              </li>
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">4. Rotasi Objek</strong> 
+                <span>Geser layar ke kiri atau kanan untuk merotasi objek. Ketuk objek untuk melihat informasi.</span>
+              </li>
+            </ul>
+            <button 
+              onClick={() => setShowInfo(false)}
+              className="w-full mt-6 py-3 bg-white text-black font-semibold rounded-xl"
+            >
+              Mengerti
+            </button>
+          </div>
+        </div>
+      )}
+
+      {infoModal && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 pointer-events-auto">
+          <div className="bg-zinc-900 border border-white/10 p-6 rounded-2xl max-w-sm w-full relative shadow-2xl text-left overflow-y-auto max-h-[80vh]">
+            <button
+              onClick={() => setInfoModal(null)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors z-10 bg-black/50 rounded-full p-1"
+            >
+              <X size={20} />
+            </button>
+            
+            <h2 className="text-2xl font-bold text-white mb-4 pr-8">{infoModal.name}</h2>
+            
+            <ImageSlider images={infoModal.image_urls} />
+            
+            <p className="text-zinc-300 text-sm leading-relaxed mb-6">
+              {infoModal.description}
+            </p>
+            
+            <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/10">
+              <span className="text-xs text-zinc-500">{infoModal.category}</span>
+              <AudioPlayer url={infoModal.audio_url} />
             </div>
+          </div>
+        </div>
+      )}
 
-            {showInfo && (
-              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 pointer-events-auto">
-                <div className="bg-zinc-900 border border-white/10 p-6 rounded-2xl max-w-sm w-full relative shadow-2xl">
-                  <button
-                    onClick={() => setShowInfo(false)}
-                    className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors"
-                  >
-                    <X size={24} />
-                  </button>
-                  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <HelpCircle size={24} className="text-blue-400" />
-                    Panduan AR
-                  </h2>
-                  <ul className="text-zinc-300 space-y-4 text-sm">
-                    <li className="flex flex-col gap-1">
-                      <strong className="text-white">1. Deteksi Permukaan</strong> 
-                      <span>Gerakkan kamera perlahan. Dekatkan atau jauhkan perangkat ke lantai/meja hingga muncul garis biru (reticle).</span>
-                    </li>
-                    <li className="flex flex-col gap-1">
-                      <strong className="text-white">2. Buat Area</strong> 
-                      <span>Ketuk layar untuk titik pertama, lalu mundur perlahan untuk menggambar area. Ketuk lagi saat bar Kesiapan Area berwarna hijau (100%).</span>
-                    </li>
-                    <li className="flex flex-col gap-1">
-                      <strong className="text-white">3. Ganti Objek Langsung</strong> 
-                      <span>Setelah area terbentuk, gunakan panah di bawah untuk menukar objek 3D. Objek akan langsung berubah tanpa perlu menggambar area lagi.</span>
-                    </li>
-                    <li className="flex flex-col gap-1">
-                      <strong className="text-white">4. Rotasi Objek</strong> 
-                      <span>Geser layar ke kiri atau kanan untuk merotasi objek. Ketuk objek untuk melihat informasi.</span>
-                    </li>
-                  </ul>
-                  <button 
-                    onClick={() => setShowInfo(false)}
-                    className="w-full mt-6 py-3 bg-white text-black font-semibold rounded-xl"
-                  >
-                    Mengerti
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {infoModal && (
-              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6 pointer-events-auto">
-                <div className="bg-zinc-900 border border-white/10 p-6 rounded-2xl max-w-sm w-full relative shadow-2xl text-left overflow-y-auto max-h-[80vh]">
-                  <button
-                    onClick={() => setInfoModal(null)}
-                    className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors z-10 bg-black/50 rounded-full p-1"
-                  >
-                    <X size={20} />
-                  </button>
-                  
-                  <h2 className="text-2xl font-bold text-white mb-4 pr-8">{infoModal.name}</h2>
-                  
-                  <ImageSlider images={infoModal.image_urls} />
-                  
-                  <p className="text-zinc-300 text-sm leading-relaxed mb-6">
-                    {infoModal.description}
-                  </p>
-                  
-                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/10">
-                    <span className="text-xs text-zinc-500">{infoModal.category}</span>
-                    <AudioPlayer url={infoModal.audio_url} />
-                  </div>
-                </div>
-              </div>
-            )}
-          </XRDomOverlay>
-          
-          <OrbitControls />
-        </XR>
-      </Canvas>
 
       {currentScreen === 'dashboard' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-auto">
@@ -612,7 +650,7 @@ export default function App() {
               <button
                 onClick={async () => {
                   if (isARSupported === false) {
-                    alert("AR tidak didukung di perangkat atau browser ini.");
+                    setCurrentScreen('viewer');
                     return;
                   }
                   try {
@@ -620,19 +658,19 @@ export default function App() {
                     setCurrentScreen('ar');
                   } catch (err: any) {
                     console.error("Failed to enter AR:", err);
-                    alert("AR tidak didukung di perangkat ini atau terjadi kesalahan: " + err.message);
+                    setCurrentScreen('viewer');
                   }
                 }}
-                disabled={isARSupported === false || !selectedEra || filteredArData.length === 0}
+                disabled={!selectedEra || filteredArData.length === 0}
                 className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 ${
-                  isARSupported === false || !selectedEra || filteredArData.length === 0
+                  !selectedEra || filteredArData.length === 0
                     ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' 
                     : 'bg-amber-600 hover:bg-amber-700 text-white active:scale-95 shadow-lg shadow-amber-600/25'
                 }`}
               >
-                <Bone size={20} />
+                {isARSupported === false ? <Monitor size={20} /> : <Bone size={20} />}
                 {isARSupported === false 
-                  ? 'AR Tidak Didukung' 
+                  ? 'Buka Viewer 3D' 
                   : !selectedEra 
                     ? 'Pilih Era Dulu' 
                     : filteredArData.length === 0 
@@ -660,6 +698,26 @@ export default function App() {
           <p className="text-zinc-400 mb-8 text-center max-w-sm leading-relaxed">
             Time-Reconstruction Heritage Platform AR adalah aplikasi Augmented Reality interaktif yang dirancang untuk membantu pengguna memvisualisasikan dan mempelajari bangun ruang tiga dimensi secara langsung di lingkungan sekitar.
           </p>
+          
+          <div className="flex flex-col gap-4 w-full max-w-xs mb-8">
+            <button
+              onClick={() => setShowQRCode(!showQRCode)}
+              className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border border-white/10"
+            >
+              <QrCode size={20} />
+              {showQRCode ? 'Sembunyikan QR Code' : 'Tampilkan QR Code AR'}
+            </button>
+            
+            {showQRCode && (
+              <div className="bg-white p-4 rounded-2xl flex flex-col items-center gap-3 animate-in fade-in zoom-in duration-300">
+                <QRCodeCanvas value={appUrl} size={180} />
+                <p className="text-zinc-900 text-[10px] text-center font-medium leading-tight">
+                  Scan QR ini di HP untuk<br/>pengalaman AR yang lebih nyata!
+                </p>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => setCurrentScreen('dashboard')}
             className="px-8 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 transition-colors"
