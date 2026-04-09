@@ -7,10 +7,9 @@ import { useState, useRef, useEffect, Suspense, Component, ReactNode, useMemo } 
 import { Canvas } from '@react-three/fiber';
 import { XR, createXRStore, useXRHitTest, useXRInputSourceEvent, XRDomOverlay } from '@react-three/xr';
 import { OrbitControls, Environment, Line, useGLTF, useProgress } from '@react-three/drei';
-import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause, QrCode, Monitor, Camera, Scan } from 'lucide-react';
+import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause, QrCode, Monitor } from 'lucide-react';
 import * as THREE from 'three';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Html5Qrcode } from 'html5-qrcode';
 
 // Data Interface
 interface ModelData {
@@ -172,9 +171,9 @@ function ReticleAndPlacement({
 
       {/* Permanent ring under the object after placement */}
       {playArea && objectPosition && (
-        <mesh position={[objectPosition.x, objectPosition.y + 0.01, objectPosition.z]} rotation-x={-Math.PI / 2}>
-          <ringGeometry args={[playArea.scale[0] * 0.4, playArea.scale[0] * 0.5, 64]} />
-          <meshBasicMaterial color="#06b6d4" opacity={0.6} transparent />
+        <mesh position={[objectPosition.x, objectPosition.y + 0.001, objectPosition.z]} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.05, 0.06, 32]} />
+          <meshBasicMaterial color="#06b6d4" opacity={0.5} transparent />
         </mesh>
       )}
 
@@ -183,15 +182,15 @@ function ReticleAndPlacement({
       )}
 
       {p1 && p2 && (
-        <mesh position={[ (p1.x + p2.x)/2, p1.y + 0.005, (p1.z + p2.z)/2 ]} rotation-x={-Math.PI / 2} renderOrder={999}>
+        <mesh position={[ (p1.x + p2.x)/2, p1.y, (p1.z + p2.z)/2 ]} rotation-x={-Math.PI / 2} renderOrder={999}>
           <planeGeometry args={[Math.abs(p1.x - p2.x), Math.abs(p1.z - p2.z)]} />
-          <meshBasicMaterial color="#06b6d4" opacity={0.2} transparent side={THREE.DoubleSide} depthTest={false} depthWrite={false} />
+          <meshBasicMaterial color="#06b6d4" opacity={0.15} transparent side={THREE.DoubleSide} depthTest={false} depthWrite={false} />
         </mesh>
       )}
 
       {playArea && objectPosition && arData.length > 0 && (
         <group 
-          position={[objectPosition.x, objectPosition.y + 0.02, objectPosition.z]} 
+          position={objectPosition} 
           scale={playArea.scale}
           rotation={[0, rotationY, 0]}
         >
@@ -207,9 +206,7 @@ function ReticleAndPlacement({
                 <meshBasicMaterial color="#3b82f6" wireframe />
               </mesh>
             }>
-              <group position={[0, 0, 0]}>
-                <GLBModel url={arData[objectIndex].file_url} />
-              </group>
+              <GLBModel url={arData[objectIndex].file_url} />
             </Suspense>
           </ErrorBoundary>
         </group>
@@ -285,240 +282,6 @@ function AudioPlayer({ url }: { url: string }) {
   );
 }
 
-function MarkerARViewer({ 
-  arData, 
-  objectIndex, 
-  onClose, 
-  setInfoModal,
-  handleNextObject,
-  handlePrevObject,
-  rotationY,
-  handleTouchStart,
-  handleTouchMove,
-  handleTouchEnd
-}: { 
-  arData: ModelData[], 
-  objectIndex: number, 
-  onClose: () => void,
-  setInfoModal: (info: ModelData | null) => void,
-  handleNextObject: () => void,
-  handlePrevObject: () => void,
-  rotationY: number,
-  handleTouchStart: (e: any) => void,
-  handleTouchMove: (e: any) => void,
-  handleTouchEnd: () => void
-}) {
-  const [qrPos, setQrPos] = useState<{ x: number, y: number, size: number } | null>(null);
-  const [isScanning, setIsScanning] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isScannerRunning = useRef(false);
-  const videoContainerId = "qr-reader";
-
-  useEffect(() => {
-    // Clean up any existing scanner instance before creating a new one
-    const cleanup = async () => {
-      if (isScannerRunning.current && scannerRef.current) {
-        try {
-          await scannerRef.current.stop();
-          isScannerRunning.current = false;
-        } catch (e) {
-          console.warn("Cleanup error:", e);
-        }
-      }
-    };
-
-    const startScanner = async () => {
-      await cleanup();
-      
-      const scanner = new Html5Qrcode(videoContainerId);
-      scannerRef.current = scanner;
-      
-      try {
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 20,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: window.innerWidth / window.innerHeight
-          },
-          (decodedText, result: any) => {
-            const box = result.decodedResult?.itemSelection;
-            if (box) {
-              // Calculate center and size of the QR code
-              const x = (box.left + box.right) / 2;
-              const y = (box.top + box.bottom) / 2;
-              const size = Math.max(box.right - box.left, box.bottom - box.top);
-              
-              setQrPos({ x, y, size });
-              setIsScanning(false);
-            }
-          },
-          () => {}
-        );
-        isScannerRunning.current = true;
-        setError(null);
-      } catch (err: any) {
-        console.error("Scanner error:", err);
-        if (err?.toString().includes("NotAllowedError") || err?.toString().includes("Permission denied")) {
-          setError("Izin kamera ditolak. Silahkan aktifkan izin kamera di pengaturan browser Anda.");
-        } else {
-          setError("Gagal membuka kamera. Pastikan tidak ada aplikasi lain yang menggunakan kamera.");
-        }
-        isScannerRunning.current = false;
-      }
-    };
-
-    startScanner();
-
-    return () => {
-      if (isScannerRunning.current && scannerRef.current) {
-        scannerRef.current.stop()
-          .then(() => {
-            isScannerRunning.current = false;
-          })
-          .catch(err => console.warn("Error stopping scanner:", err));
-      }
-    };
-  }, []);
-
-  return (
-    <div className="absolute inset-0 bg-black z-50 overflow-hidden">
-      {/* Camera Container with fixed styling to prevent duplication/split */}
-      <div 
-        id={videoContainerId} 
-        className="absolute inset-0 w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover" 
-      />
-      
-      {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 p-6 text-center z-[70]">
-          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
-            <Camera size={32} className="text-red-500" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">Akses Kamera Diperlukan</h3>
-          <p className="text-zinc-400 text-sm mb-8 max-w-xs leading-relaxed">
-            {error}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-8 py-3 bg-white text-black font-bold rounded-xl active:scale-95 transition-transform"
-          >
-            Muat Ulang Aplikasi
-          </button>
-        </div>
-      )}
-
-      {/* Top UI Overlay (Matching XR Mode) */}
-      <div className="absolute top-6 left-6 right-6 flex justify-between items-start z-[60] pointer-events-none">
-        <div className="flex flex-col gap-3 pointer-events-auto w-48">
-          <div className="bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-semibold text-white uppercase tracking-wider">Status Scan</span>
-              <span className="text-xs font-mono text-zinc-300">{isScanning ? 'Mencari...' : 'Terkunci'}</span>
-            </div>
-            <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-500 ${isScanning ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}
-                style={{ width: isScanning ? '50%' : '100%' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        <button
-          onClick={onClose}
-          className="p-3 bg-red-500/80 backdrop-blur-md rounded-xl text-white shadow-lg pointer-events-auto border border-red-400/30 flex items-center gap-2"
-        >
-          <X size={20} />
-          <span className="text-sm font-medium">Keluar</span>
-        </button>
-      </div>
-
-      {/* Center Instruction (Matching XR Mode) */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full border border-white/20 text-center text-sm max-w-[80%] pointer-events-none shadow-lg z-[60]">
-        {isScanning ? "Arahkan kamera ke QR Code AR" : "QR Terdeteksi! Gunakan panah untuk ganti objek."}
-      </div>
-
-      {!isScanning && qrPos && (
-        <div className="absolute inset-0 z-10">
-          {/* Touch Area for Rotation */}
-          <div 
-            className="absolute inset-0 z-0 pointer-events-auto"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onTouchCancel={handleTouchEnd}
-          />
-
-          <Canvas className="w-full h-full pointer-events-none" camera={{ position: [0, 0, 5], fov: 50 }}>
-            <ambientLight intensity={0.8} />
-            <directionalLight position={[10, 10, 10]} intensity={1.5} />
-            <Environment preset="city" />
-            <Suspense fallback={null}>
-              <group 
-                position={[
-                  (qrPos.x / window.innerWidth) * 4 - 2,
-                  -(qrPos.y / window.innerHeight) * 6 + 3,
-                  0
-                ]}
-                scale={[qrPos.size / 80, qrPos.size / 80, qrPos.size / 80]}
-                rotation={[0, rotationY, 0]}
-              >
-                <group position={[0, 0, 0]}>
-                  <GLBModel url={arData[objectIndex].file_url} />
-                </group>
-                {/* Blue ring under the object */}
-                <mesh rotation-x={-Math.PI / 2} position={[0, -0.05, 0]}>
-                  <ringGeometry args={[0.6, 0.7, 64]} />
-                  <meshBasicMaterial color="#06b6d4" opacity={0.6} transparent />
-                </mesh>
-                <mesh rotation-x={-Math.PI / 2} position={[0, -0.06, 0]}>
-                  <planeGeometry args={[1.5, 1.5]} />
-                  <meshBasicMaterial color="#06b6d4" opacity={0.1} transparent />
-                </mesh>
-              </group>
-            </Suspense>
-          </Canvas>
-
-          {/* Bottom Controls Overlay (Matching XR Mode) */}
-          <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none z-20">
-            <button
-              onClick={() => setInfoModal(arData[objectIndex])}
-              className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg flex items-center gap-2 pointer-events-auto"
-            >
-              <Info size={18} className="text-blue-400" />
-              <span className="text-sm font-medium">Informasi Objek</span>
-            </button>
-
-            <div className="bg-black/60 backdrop-blur-md p-2 rounded-2xl flex items-center gap-2 pointer-events-auto border border-white/10 shadow-2xl">
-              <button onClick={handlePrevObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
-                <ChevronLeft size={24} />
-              </button>
-              <div className="w-16 h-16 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden border border-white/20">
-                <img src={arData[objectIndex].img_cover} alt="Icon" className="w-full h-full object-cover" crossOrigin="anonymous" />
-              </div>
-              <button onClick={handleNextObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
-                <ChevronRight size={24} />
-              </button>
-            </div>
-            
-            <button 
-              onClick={() => {
-                setIsScanning(true);
-                setQrPos(null);
-              }}
-              className="mt-4 flex items-center gap-2 text-zinc-400 hover:text-white transition-colors pointer-events-auto bg-black/40 px-4 py-1.5 rounded-full backdrop-blur-sm"
-            >
-              <Scan size={16} />
-              <span className="text-xs">Scan Ulang QR</span>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function App() {
   const [arData, setArData] = useState<ModelData[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -537,7 +300,7 @@ export default function App() {
   const [readiness, setReadiness] = useState(0);
   const [rotationY, setRotationY] = useState(0);
   const [infoModal, setInfoModal] = useState<ModelData | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar' | 'viewer' | 'marker-ar'>('dashboard');
+  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar' | 'viewer'>('dashboard');
   const [showQRCode, setShowQRCode] = useState(false);
 
   const [isSwiping, setIsSwiping] = useState(false);
@@ -638,23 +401,8 @@ export default function App() {
   const appUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
-    <div className={`relative w-full h-screen overflow-hidden font-sans ${currentScreen === 'ar' || currentScreen === 'viewer' || currentScreen === 'marker-ar' ? 'bg-transparent' : 'bg-zinc-900'}`}>
+    <div className={`relative w-full h-screen overflow-hidden font-sans ${currentScreen === 'ar' || currentScreen === 'viewer' ? 'bg-transparent' : 'bg-zinc-900'}`}>
       
-      {currentScreen === 'marker-ar' && (
-        <MarkerARViewer 
-          arData={filteredArData}
-          objectIndex={objectIndex}
-          onClose={() => setCurrentScreen('dashboard')}
-          setInfoModal={setInfoModal}
-          handleNextObject={handleNextObject}
-          handlePrevObject={handlePrevObject}
-          rotationY={rotationY}
-          handleTouchStart={handleTouchStart}
-          handleTouchMove={handleTouchMove}
-          handleTouchEnd={handleTouchEnd}
-        />
-      )}
-
       {(currentScreen === 'ar' || currentScreen === 'viewer') && (
         <Canvas className="w-full h-full" camera={{ position: [0, 1, 2], near: 0.001, far: 100 }}>
           {currentScreen === 'ar' ? (
@@ -806,31 +554,26 @@ export default function App() {
             </button>
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <HelpCircle size={24} className="text-blue-400" />
-              Panduan TRHP AR
+              Panduan AR
             </h2>
-            <div className="space-y-6">
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl">
-                <h3 className="text-emerald-400 text-sm font-bold mb-2 flex items-center gap-2">
-                  <Bone size={16} /> Mode Play Area (AR)
-                </h3>
-                <ul className="text-zinc-300 space-y-2 text-[11px]">
-                  <li>• Gerakkan kamera hingga muncul garis biru (reticle).</li>
-                  <li>• Ketuk layar untuk mulai menggambar area di lantai.</li>
-                  <li>• Mundur perlahan hingga bar Kesiapan Area 100%.</li>
-                </ul>
-              </div>
-
-              <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
-                <h3 className="text-amber-400 text-sm font-bold mb-2 flex items-center gap-2">
-                  <Scan size={16} /> Mode Marker (Scan QR)
-                </h3>
-                <ul className="text-zinc-300 space-y-2 text-[11px]">
-                  <li>• Gunakan jika perangkat tidak mendukung Play Area.</li>
-                  <li>• Arahkan kamera ke QR Code yang tersedia.</li>
-                  <li>• Objek akan langsung muncul di atas QR Code tersebut.</li>
-                </ul>
-              </div>
-            </div>
+            <ul className="text-zinc-300 space-y-4 text-sm">
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">1. Deteksi Permukaan</strong> 
+                <span>Gerakkan kamera perlahan. Dekatkan atau jauhkan perangkat ke lantai/meja hingga muncul garis biru (reticle).</span>
+              </li>
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">2. Buat Area</strong> 
+                <span>Ketuk layar untuk titik pertama, lalu mundur perlahan untuk menggambar area. Ketuk lagi saat bar Kesiapan Area berwarna hijau (100%).</span>
+              </li>
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">3. Ganti Objek Langsung</strong> 
+                <span>Setelah area terbentuk, gunakan panah di bawah untuk menukar objek 3D. Objek akan langsung berubah tanpa perlu menggambar area lagi.</span>
+              </li>
+              <li className="flex flex-col gap-1">
+                <strong className="text-white">4. Rotasi Objek</strong> 
+                <span>Geser layar ke kiri atau kanan untuk merotasi objek. Ketuk objek untuk melihat informasi.</span>
+              </li>
+            </ul>
             <button 
               onClick={() => setShowInfo(false)}
               className="w-full mt-6 py-3 bg-white text-black font-semibold rounded-xl"
@@ -883,26 +626,6 @@ export default function App() {
             <p className="text-zinc-400 text-sm mb-6 text-center font-medium">by Pandora</p>
             <p className="text-zinc-400 mb-8 text-center max-w-xs">Eksplorasi peninggalan prasejarah Bali dalam wujud tiga dimensi.</p>
             
-            {isARSupported === true ? (
-              <div className="mb-8 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <p className="text-emerald-400 text-xs text-center leading-relaxed font-medium">
-                  ✨ Perangkat mendukung Fitur Play Area.<br/>
-                  <span className="text-white">Gunakan permukaan lantai untuk memunculkan objek.</span>
-                </p>
-              </div>
-            ) : isARSupported === false ? (
-              <div className="mb-8 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <p className="text-amber-400 text-xs text-center leading-relaxed font-medium">
-                  ⚠️ Perangkat tidak mendukung Fitur Play Area.<br/>
-                  <span className="text-white">Silahkan scan QR yang ada pada About AR</span> untuk memunculkan objek 3D.
-                </p>
-              </div>
-            ) : (
-              <div className="mb-8 h-[52px] flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
-              </div>
-            )}
-
             <div className="flex gap-3 mb-8">
               {[
                 { id: '231', name: 'Klasik' },
@@ -927,7 +650,7 @@ export default function App() {
               <button
                 onClick={async () => {
                   if (isARSupported === false) {
-                    setCurrentScreen('marker-ar');
+                    setCurrentScreen('viewer');
                     return;
                   }
                   try {
@@ -935,7 +658,7 @@ export default function App() {
                     setCurrentScreen('ar');
                   } catch (err: any) {
                     console.error("Failed to enter AR:", err);
-                    setCurrentScreen('marker-ar');
+                    setCurrentScreen('viewer');
                   }
                 }}
                 disabled={!selectedEra || filteredArData.length === 0}
@@ -945,26 +668,15 @@ export default function App() {
                     : 'bg-amber-600 hover:bg-amber-700 text-white active:scale-95 shadow-lg shadow-amber-600/25'
                 }`}
               >
-                {isARSupported === false ? <Scan size={20} /> : <Bone size={20} />}
+                {isARSupported === false ? <Monitor size={20} /> : <Bone size={20} />}
                 {isARSupported === false 
-                  ? 'Scan QR Marker' 
+                  ? 'Buka Viewer 3D' 
                   : !selectedEra 
                     ? 'Pilih Era Dulu' 
                     : filteredArData.length === 0 
                       ? 'Data Kosong' 
-                      : 'Mulai Play Area AR'}
+                      : 'Mulai AR'}
               </button>
-              
-              {isARSupported === false && (
-                <button
-                  onClick={() => setCurrentScreen('viewer')}
-                  className="w-full bg-zinc-800/80 backdrop-blur-md hover:bg-zinc-700 text-white py-3 rounded-xl font-semibold transition-all active:scale-95 border border-white/10 flex items-center justify-center gap-2"
-                >
-                  <Monitor size={18} />
-                  Buka Viewer 3D Saja
-                </button>
-              )}
-
               <button
                 onClick={() => setCurrentScreen('about')}
                 className="w-full bg-zinc-800/80 backdrop-blur-md hover:bg-zinc-700 text-white py-4 rounded-2xl font-semibold transition-all active:scale-95 border border-white/10 flex items-center justify-center gap-2"
