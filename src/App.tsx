@@ -40,6 +40,81 @@ function GLBModel({ url }: { url: string }) {
   return <primitive object={clone} />;
 }
 
+/**
+ * Komponen untuk menampilkan visualisasi area (garis dan bidang biru)
+ */
+function PlayAreaVisuals({ p1, p2, isFinalized }: { p1: THREE.Vector3, p2: THREE.Vector3, isFinalized: boolean }) {
+  const linePoints = useMemo(() => [
+    new THREE.Vector3(p1.x, p1.y, p1.z),
+    new THREE.Vector3(p2.x, p1.y, p1.z),
+    new THREE.Vector3(p2.x, p1.y, p2.z),
+    new THREE.Vector3(p1.x, p1.y, p2.z),
+    new THREE.Vector3(p1.x, p1.y, p1.z),
+  ], [p1, p2]);
+
+  return (
+    <group>
+      {/* Garis batas area */}
+      <Line 
+        points={linePoints} 
+        color="#06b6d4" 
+        lineWidth={4} 
+        transparent 
+        depthTest={isFinalized} 
+        depthWrite={isFinalized} 
+        renderOrder={isFinalized ? 1 : 1000} 
+      />
+      
+      {/* Bidang area (lantai biru) */}
+      <mesh 
+        position={[ (p1.x + p2.x)/2, p1.y, (p1.z + p2.z)/2 ]} 
+        rotation-x={-Math.PI / 2} 
+        renderOrder={isFinalized ? 0 : 999}
+      >
+        <planeGeometry args={[Math.abs(p1.x - p2.x), Math.abs(p1.z - p2.z)]} />
+        <meshBasicMaterial 
+          color="#06b6d4" 
+          opacity={0.15} 
+          transparent 
+          side={THREE.DoubleSide} 
+          depthTest={isFinalized} 
+          depthWrite={isFinalized} 
+        />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * Komponen untuk menampilkan objek 3D di atas area
+ */
+function ARModel({ url, position, scale, rotationY }: { url: string, position: THREE.Vector3, scale: [number, number, number], rotationY: number }) {
+  return (
+    <group 
+      position={[position.x, position.y + 0.001, position.z]} // Sedikit di atas lantai untuk menghindari z-fighting
+      scale={scale}
+      rotation={[0, rotationY, 0]}
+      renderOrder={10} // Render setelah area
+    >
+      <ErrorBoundary fallback={
+        <mesh position={[0, 0.5, 0]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#ef4444" wireframe />
+        </mesh>
+      }>
+        <Suspense fallback={
+          <mesh position={[0, 0.5, 0]}>
+            <sphereGeometry args={[0.5, 16, 16]} />
+            <meshBasicMaterial color="#3b82f6" wireframe />
+          </mesh>
+        }>
+          <GLBModel url={url} />
+        </Suspense>
+      </ErrorBoundary>
+    </group>
+  );
+}
+
 const store = createXRStore({
   depthSensing: false,
   meshDetection: false,
@@ -153,54 +228,27 @@ function ReticleAndPlacement({
   const p1 = playArea ? playArea.p1 : areaPoints[0];
   const p2 = playArea ? playArea.p2 : (areaPoints.length === 1 ? currentPosition : null);
 
-  const linePoints = (p1 && p2) ? [
-    new THREE.Vector3(p1.x, p1.y, p1.z),
-    new THREE.Vector3(p2.x, p1.y, p1.z),
-    new THREE.Vector3(p2.x, p1.y, p2.z),
-    new THREE.Vector3(p1.x, p1.y, p2.z),
-    new THREE.Vector3(p1.x, p1.y, p1.z),
-  ] : [];
-
   return (
     <>
+      {/* Reticle (Penanda lantai saat mencari permukaan) */}
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} matrixAutoUpdate={false} renderOrder={1000}>
         <ringGeometry args={[0.05, 0.08, 32]} />
         <meshBasicMaterial color="white" opacity={0.8} transparent depthTest={false} depthWrite={false} />
       </mesh>
 
-      {linePoints.length > 0 && (
-        <Line points={linePoints} color="#06b6d4" lineWidth={4} transparent depthTest={false} depthWrite={false} renderOrder={1000} />
-      )}
-
+      {/* Visualisasi Area (Garis dan Bidang) */}
       {p1 && p2 && (
-        <mesh position={[ (p1.x + p2.x)/2, p1.y, (p1.z + p2.z)/2 ]} rotation-x={-Math.PI / 2} renderOrder={999}>
-          <planeGeometry args={[Math.abs(p1.x - p2.x), Math.abs(p1.z - p2.z)]} />
-          <meshBasicMaterial color="#06b6d4" opacity={0.15} transparent side={THREE.DoubleSide} depthTest={false} depthWrite={false} />
-        </mesh>
+        <PlayAreaVisuals p1={p1} p2={p2} isFinalized={!!playArea} />
       )}
 
+      {/* Objek 3D (Hanya muncul setelah area dikunci) */}
       {playArea && objectPosition && arData.length > 0 && (
-        <group 
-          position={objectPosition} 
+        <ARModel 
+          url={arData[objectIndex].file_url}
+          position={objectPosition}
           scale={playArea.scale}
-          rotation={[0, rotationY, 0]}
-        >
-          <ErrorBoundary fallback={
-            <mesh position={[0, 0.5, 0]}>
-              <boxGeometry args={[1, 1, 1]} />
-              <meshStandardMaterial color="#ef4444" wireframe />
-            </mesh>
-          }>
-            <Suspense fallback={
-              <mesh position={[0, 0.5, 0]}>
-                <sphereGeometry args={[0.5, 16, 16]} />
-                <meshBasicMaterial color="#3b82f6" wireframe />
-              </mesh>
-            }>
-              <GLBModel url={arData[objectIndex].file_url} />
-            </Suspense>
-          </ErrorBoundary>
-        </group>
+          rotationY={rotationY}
+        />
       )}
     </>
   );
