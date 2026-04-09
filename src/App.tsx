@@ -4,12 +4,12 @@
  */
 
 import { useState, useRef, useEffect, Suspense, Component, ReactNode, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas } from '@react-three/fiber';
 import { XR, createXRStore, useXRHitTest, useXRInputSourceEvent, XRDomOverlay } from '@react-three/xr';
-import { OrbitControls, Environment, Line, useGLTF, useProgress, PerspectiveCamera, ContactShadows } from '@react-three/drei';
-import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause, Monitor, Smartphone } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { OrbitControls, Environment, Line, useGLTF, useProgress } from '@react-three/drei';
+import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause, QrCode, Monitor } from 'lucide-react';
 import * as THREE from 'three';
+import { QRCodeCanvas } from 'qrcode.react';
 
 // Data Interface
 interface ModelData {
@@ -39,109 +39,6 @@ function GLBModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   const clone = useMemo(() => scene.clone(), [scene, url]);
   return <primitive object={clone} />;
-}
-
-/**
- * Komponen untuk menampilkan visualisasi area (garis dan bidang biru)
- */
-function PlayAreaVisuals({ p1, p2, isFinalized }: { p1: THREE.Vector3, p2: THREE.Vector3, isFinalized: boolean }) {
-  const linePoints = useMemo(() => [
-    new THREE.Vector3(p1.x, p1.y, p1.z),
-    new THREE.Vector3(p2.x, p1.y, p1.z),
-    new THREE.Vector3(p2.x, p1.y, p2.z),
-    new THREE.Vector3(p1.x, p1.y, p2.z),
-    new THREE.Vector3(p1.x, p1.y, p1.z),
-  ], [p1, p2]);
-
-  return (
-    <group>
-      {/* Garis batas area */}
-      <Line 
-        points={linePoints} 
-        color="#06b6d4" 
-        lineWidth={4} 
-        transparent 
-        depthTest={isFinalized} 
-        depthWrite={isFinalized} 
-        renderOrder={isFinalized ? 1 : 1000} 
-      />
-      
-      {/* Bidang area (lantai biru) */}
-      <mesh 
-        position={[ (p1.x + p2.x)/2, p1.y, (p1.z + p2.z)/2 ]} 
-        rotation-x={-Math.PI / 2} 
-        renderOrder={isFinalized ? 0 : 999}
-      >
-        <planeGeometry args={[Math.abs(p1.x - p2.x), Math.abs(p1.z - p2.z)]} />
-        <meshBasicMaterial 
-          color="#06b6d4" 
-          opacity={0.15} 
-          transparent 
-          side={THREE.DoubleSide} 
-          depthTest={isFinalized} 
-          depthWrite={isFinalized} 
-        />
-      </mesh>
-    </group>
-  );
-}
-
-/**
- * Komponen untuk menampilkan objek 3D di atas area
- */
-function ARModel({ url, position, scale, rotationY }: { url: string, position: THREE.Vector3, scale: [number, number, number], rotationY: number }) {
-  return (
-    <group 
-      position={[position.x, position.y + 0.001, position.z]} // Sedikit di atas lantai untuk menghindari z-fighting
-      scale={scale}
-      rotation={[0, rotationY, 0]}
-      renderOrder={10} // Render setelah area
-    >
-      <ErrorBoundary fallback={
-        <mesh position={[0, 0.5, 0]}>
-          <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial color="#ef4444" wireframe />
-        </mesh>
-      }>
-        <Suspense fallback={
-          <mesh position={[0, 0.5, 0]}>
-            <sphereGeometry args={[0.5, 16, 16]} />
-            <meshBasicMaterial color="#3b82f6" wireframe />
-          </mesh>
-        }>
-          <GLBModel url={url} />
-        </Suspense>
-      </ErrorBoundary>
-    </group>
-  );
-}
-
-/**
- * Komponen Viewer 3D Standar (Fallback jika AR tidak didukung)
- */
-function Fallback3DViewer({ url, rotationY }: { url: string, rotationY: number }) {
-  const modelRef = useRef<THREE.Group>(null);
-
-  return (
-    <group rotation={[0, rotationY, 0]}>
-      <ErrorBoundary fallback={
-        <mesh>
-          <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial color="#ef4444" wireframe />
-        </mesh>
-      }>
-        <Suspense fallback={
-          <mesh>
-            <sphereGeometry args={[0.5, 16, 16]} />
-            <meshBasicMaterial color="#3b82f6" wireframe />
-          </mesh>
-        }>
-          <GLBModel url={url} />
-        </Suspense>
-      </ErrorBoundary>
-      <ContactShadows opacity={0.4} scale={10} blur={2} far={10} resolution={256} color="#000000" />
-    </group>
-  );
 }
 
 const store = createXRStore({
@@ -257,27 +154,62 @@ function ReticleAndPlacement({
   const p1 = playArea ? playArea.p1 : areaPoints[0];
   const p2 = playArea ? playArea.p2 : (areaPoints.length === 1 ? currentPosition : null);
 
+  const linePoints = (p1 && p2) ? [
+    new THREE.Vector3(p1.x, p1.y, p1.z),
+    new THREE.Vector3(p2.x, p1.y, p1.z),
+    new THREE.Vector3(p2.x, p1.y, p2.z),
+    new THREE.Vector3(p1.x, p1.y, p2.z),
+    new THREE.Vector3(p1.x, p1.y, p1.z),
+  ] : [];
+
   return (
     <>
-      {/* Reticle (Penanda lantai saat mencari permukaan) */}
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} matrixAutoUpdate={false} renderOrder={1000}>
         <ringGeometry args={[0.05, 0.08, 32]} />
-        <meshBasicMaterial color="white" opacity={0.8} transparent depthTest={false} depthWrite={false} />
+        <meshBasicMaterial color="#06b6d4" opacity={0.8} transparent depthTest={false} depthWrite={false} />
       </mesh>
 
-      {/* Visualisasi Area (Garis dan Bidang) */}
-      {p1 && p2 && (
-        <PlayAreaVisuals p1={p1} p2={p2} isFinalized={!!playArea} />
+      {/* Permanent ring under the object after placement */}
+      {playArea && objectPosition && (
+        <mesh position={[objectPosition.x, objectPosition.y + 0.001, objectPosition.z]} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.05, 0.06, 32]} />
+          <meshBasicMaterial color="#06b6d4" opacity={0.5} transparent />
+        </mesh>
       )}
 
-      {/* Objek 3D (Hanya muncul setelah area dikunci) */}
+      {linePoints.length > 0 && (
+        <Line points={linePoints} color="#06b6d4" lineWidth={4} transparent depthTest={false} depthWrite={false} renderOrder={1000} />
+      )}
+
+      {p1 && p2 && (
+        <mesh position={[ (p1.x + p2.x)/2, p1.y, (p1.z + p2.z)/2 ]} rotation-x={-Math.PI / 2} renderOrder={999}>
+          <planeGeometry args={[Math.abs(p1.x - p2.x), Math.abs(p1.z - p2.z)]} />
+          <meshBasicMaterial color="#06b6d4" opacity={0.15} transparent side={THREE.DoubleSide} depthTest={false} depthWrite={false} />
+        </mesh>
+      )}
+
       {playArea && objectPosition && arData.length > 0 && (
-        <ARModel 
-          url={arData[objectIndex].file_url}
-          position={objectPosition}
+        <group 
+          position={objectPosition} 
           scale={playArea.scale}
-          rotationY={rotationY}
-        />
+          rotation={[0, rotationY, 0]}
+        >
+          <ErrorBoundary fallback={
+            <mesh position={[0, 0.5, 0]}>
+              <boxGeometry args={[1, 1, 1]} />
+              <meshStandardMaterial color="#ef4444" wireframe />
+            </mesh>
+          }>
+            <Suspense fallback={
+              <mesh position={[0, 0.5, 0]}>
+                <sphereGeometry args={[0.5, 16, 16]} />
+                <meshBasicMaterial color="#3b82f6" wireframe />
+              </mesh>
+            }>
+              <GLBModel url={arData[objectIndex].file_url} />
+            </Suspense>
+          </ErrorBoundary>
+        </group>
       )}
     </>
   );
@@ -368,7 +300,8 @@ export default function App() {
   const [readiness, setReadiness] = useState(0);
   const [rotationY, setRotationY] = useState(0);
   const [infoModal, setInfoModal] = useState<ModelData | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar' | '3d-preview'>('dashboard');
+  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar' | 'viewer'>('dashboard');
+  const [showQRCode, setShowQRCode] = useState(false);
 
   const [isSwiping, setIsSwiping] = useState(false);
   const [touchStartX, setTouchStartX] = useState(0);
@@ -425,8 +358,6 @@ export default function App() {
     setIsSwiping(false);
   };
 
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
-
   useEffect(() => {
     if (isLoadingData) return;
     if (loadingProgress === 100 || (loaded > 0 && loaded === total)) {
@@ -467,10 +398,13 @@ export default function App() {
     );
   }
 
+  const appUrl = typeof window !== 'undefined' ? window.location.href : '';
+
   return (
-    <div className={`relative w-full h-screen overflow-hidden font-sans ${currentScreen === 'ar' || currentScreen === '3d-preview' ? 'bg-transparent' : 'bg-zinc-900'}`}>
-      {(currentScreen === 'ar' || currentScreen === '3d-preview') && (
-        <Canvas className="w-full h-full" camera={{ position: [0, 1, 3], near: 0.001, far: 100 }}>
+    <div className={`relative w-full h-screen overflow-hidden font-sans ${currentScreen === 'ar' || currentScreen === 'viewer' ? 'bg-transparent' : 'bg-zinc-900'}`}>
+      
+      {(currentScreen === 'ar' || currentScreen === 'viewer') && (
+        <Canvas className="w-full h-full" camera={{ position: [0, 1, 2], near: 0.001, far: 100 }}>
           {currentScreen === 'ar' ? (
             <XR store={store}>
               <ambientLight intensity={0.5} />
@@ -520,7 +454,7 @@ export default function App() {
 
                 <div className="absolute top-6 right-6 pointer-events-auto z-10">
                   <button
-                    onClick={() => window.location.reload()}
+                    onClick={() => setCurrentScreen('dashboard')}
                     className="flex items-center gap-2 bg-red-500/80 backdrop-blur-md px-4 py-2 rounded-xl border border-red-400/30 text-white hover:bg-red-500 transition-all shadow-lg"
                   >
                     <X size={18} />
@@ -535,9 +469,7 @@ export default function App() {
                 <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none z-10">
                   {readiness >= 100 && filteredArData.length > 0 && (
                     <button
-                      onClick={() => {
-                        setInfoModal(filteredArData[objectIndex]);
-                      }}
+                      onClick={() => setInfoModal(filteredArData[objectIndex])}
                       className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg flex items-center gap-2 pointer-events-auto"
                     >
                       <Info size={18} className="text-blue-400" />
@@ -547,106 +479,68 @@ export default function App() {
 
                   {filteredArData.length > 0 && (
                     <div className="bg-black/60 backdrop-blur-md p-2 rounded-2xl flex items-center gap-2 pointer-events-auto border border-white/10 shadow-2xl">
-                      <button
-                        onClick={handlePrevObject}
-                        className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors"
-                        aria-label="Objek Sebelumnya"
-                      >
+                      <button onClick={handlePrevObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
                         <ChevronLeft size={24} />
                       </button>
-                      
                       <div className="w-16 h-16 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden border border-white/20">
-                        <img 
-                          src={filteredArData[objectIndex].img_cover} 
-                          alt="Icon" 
-                          className="w-full h-full object-cover"
-                          crossOrigin="anonymous"
-                        />
+                        <img src={filteredArData[objectIndex].img_cover} alt="Icon" className="w-full h-full object-cover" crossOrigin="anonymous" />
                       </div>
-
-                      <button
-                        onClick={handleNextObject}
-                        className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors"
-                        aria-label="Objek Selanjutnya"
-                      >
+                      <button onClick={handleNextObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
                         <ChevronRight size={24} />
                       </button>
                     </div>
                   )}
                 </div>
               </XRDomOverlay>
-              <OrbitControls />
             </XR>
           ) : (
             <>
-              <color attach="background" args={['#18181b']} />
-              <ambientLight intensity={0.7} />
-              <pointLight position={[10, 10, 10]} intensity={1.5} />
+              <ambientLight intensity={0.8} />
+              <directionalLight position={[10, 10, 10]} intensity={1.5} />
               <Environment preset="city" />
+              <Suspense fallback={null}>
+                <group rotation={[0, rotationY, 0]}>
+                  <GLBModel url={filteredArData[objectIndex].file_url} />
+                </group>
+              </Suspense>
+              <OrbitControls makeDefault />
               
-              <Fallback3DViewer 
-                url={filteredArData[objectIndex].file_url} 
-                rotationY={rotationY} 
-              />
-              
-              <OrbitControls makeDefault minDistance={1} maxDistance={10} />
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-6 right-6 pointer-events-auto">
+                  <button
+                    onClick={() => setCurrentScreen('dashboard')}
+                    className="flex items-center gap-2 bg-red-500/80 backdrop-blur-md px-4 py-2 rounded-xl border border-red-400/30 text-white hover:bg-red-500 transition-all shadow-lg"
+                  >
+                    <X size={18} />
+                    <span className="text-sm font-medium">Tutup Viewer</span>
+                  </button>
+                </div>
+                
+                <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none">
+                  <button
+                    onClick={() => setInfoModal(filteredArData[objectIndex])}
+                    className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg flex items-center gap-2 pointer-events-auto"
+                  >
+                    <Info size={18} className="text-blue-400" />
+                    <span className="text-sm font-medium">Informasi Objek</span>
+                  </button>
+
+                  <div className="bg-black/60 backdrop-blur-md p-2 rounded-2xl flex items-center gap-2 pointer-events-auto border border-white/10 shadow-2xl">
+                    <button onClick={handlePrevObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
+                      <ChevronLeft size={24} />
+                    </button>
+                    <div className="w-16 h-16 flex items-center justify-center rounded-xl bg-white/10 overflow-hidden border border-white/20">
+                      <img src={filteredArData[objectIndex].img_cover} alt="Icon" className="w-full h-full object-cover" crossOrigin="anonymous" />
+                    </div>
+                    <button onClick={handleNextObject} className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors">
+                      <ChevronRight size={24} />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </Canvas>
-      )}
-
-      {/* UI Overlay for 3D Preview (Non-AR) */}
-      {currentScreen === '3d-preview' && (
-        <div className="absolute inset-0 pointer-events-none z-10">
-          <div className="absolute top-6 left-6 pointer-events-auto">
-            <button
-              onClick={() => setCurrentScreen('dashboard')}
-              className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 text-white hover:bg-white/20 transition-all shadow-lg"
-            >
-              <ChevronLeft size={18} />
-              <span className="text-sm font-medium">Kembali</span>
-            </button>
-          </div>
-
-          <div className="absolute top-6 right-6 pointer-events-auto">
-            <div className="bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 text-white shadow-lg flex items-center gap-2">
-              <Monitor size={18} className="text-blue-400" />
-              <span className="text-sm font-medium">Mode Preview 3D</span>
-            </div>
-          </div>
-
-          <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none">
-            <div className="bg-black/60 backdrop-blur-md p-2 rounded-2xl flex items-center gap-2 pointer-events-auto border border-white/10 shadow-2xl">
-              <button
-                onClick={handlePrevObject}
-                className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors"
-              >
-                <ChevronLeft size={24} />
-              </button>
-              <div className="px-4 py-2 text-center">
-                <p className="text-white font-bold text-sm">{filteredArData[objectIndex].name}</p>
-                <p className="text-zinc-400 text-xs">{filteredArData[objectIndex].category}</p>
-              </div>
-              <button
-                onClick={handleNextObject}
-                className="p-3 text-white hover:bg-white/10 rounded-xl transition-colors"
-              >
-                <ChevronRight size={24} />
-              </button>
-            </div>
-          </div>
-
-          {/* Marker QR Code - Pojok Kiri Bawah (Aman untuk iPhone) */}
-          <div className="absolute bottom-24 left-8 pointer-events-auto flex flex-col items-center gap-2 group">
-            <div className="bg-white p-2 rounded-xl shadow-2xl border-4 border-amber-500/50 transition-transform group-hover:scale-110">
-              <QRCodeSVG value={currentUrl} size={80} />
-            </div>
-            <div className="bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 flex items-center gap-2">
-              <Smartphone size={12} className="text-amber-400" />
-              // <span className="text-[10px] text-white font-medium">Scan untuk AR</span>
-            </div>
-          </div>
-        </div>
       )}
 
       {showInfo && (
@@ -716,6 +610,7 @@ export default function App() {
         </div>
       )}
 
+
       {currentScreen === 'dashboard' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-auto">
           <div className="absolute inset-0 z-0">
@@ -755,7 +650,7 @@ export default function App() {
               <button
                 onClick={async () => {
                   if (isARSupported === false) {
-                    setCurrentScreen('3d-preview');
+                    setCurrentScreen('viewer');
                     return;
                   }
                   try {
@@ -763,7 +658,7 @@ export default function App() {
                     setCurrentScreen('ar');
                   } catch (err: any) {
                     console.error("Failed to enter AR:", err);
-                    setCurrentScreen('3d-preview');
+                    setCurrentScreen('viewer');
                   }
                 }}
                 disabled={!selectedEra || filteredArData.length === 0}
@@ -775,7 +670,7 @@ export default function App() {
               >
                 {isARSupported === false ? <Monitor size={20} /> : <Bone size={20} />}
                 {isARSupported === false 
-                  ? 'Lihat 3D (No AR)' 
+                  ? 'Buka Viewer 3D' 
                   : !selectedEra 
                     ? 'Pilih Era Dulu' 
                     : filteredArData.length === 0 
@@ -803,6 +698,26 @@ export default function App() {
           <p className="text-zinc-400 mb-8 text-center max-w-sm leading-relaxed">
             Time-Reconstruction Heritage Platform AR adalah aplikasi Augmented Reality interaktif yang dirancang untuk membantu pengguna memvisualisasikan dan mempelajari bangun ruang tiga dimensi secara langsung di lingkungan sekitar.
           </p>
+          
+          <div className="flex flex-col gap-4 w-full max-w-xs mb-8">
+            <button
+              onClick={() => setShowQRCode(!showQRCode)}
+              className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border border-white/10"
+            >
+              <QrCode size={20} />
+              {showQRCode ? 'Sembunyikan QR Code' : 'Tampilkan QR Code AR'}
+            </button>
+            
+            {showQRCode && (
+              <div className="bg-white p-4 rounded-2xl flex flex-col items-center gap-3 animate-in fade-in zoom-in duration-300">
+                <QRCodeCanvas value={appUrl} size={180} />
+                <p className="text-zinc-900 text-[10px] text-center font-medium leading-tight">
+                  Scan QR ini di HP untuk<br/>pengalaman AR yang lebih nyata!
+                </p>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => setCurrentScreen('dashboard')}
             className="px-8 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-200 transition-colors"
