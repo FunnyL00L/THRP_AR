@@ -375,7 +375,7 @@ export default function App() {
   if (isLoadingData || isLoading) {
     return (
       <div className="flex flex-col items-center justify-center w-full h-screen bg-zinc-900 text-white font-sans">
-        <h1 className="text-3xl font-bold mb-8">Time-Reconstruction Heritage Platform AR AR</h1>
+        <h1 className="text-3xl font-bold mb-8">TRHP AR</h1>
         <div className="w-64 h-4 bg-zinc-800 rounded-full overflow-hidden mb-2 border border-zinc-700">
           <div
             className="h-full bg-blue-500 transition-all duration-200 ease-out"
