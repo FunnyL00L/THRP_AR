@@ -375,7 +375,7 @@ export default function App() {
   if (isLoadingData || isLoading) {
     return (
       <div className="flex flex-col items-center justify-center w-full h-screen bg-zinc-900 text-white font-sans">
-        <h1 className="text-3xl font-bold mb-8">THRP AR</h1>
+        <h1 className="text-3xl font-bold mb-8">Time-Reconstruction Heritage Platform AR AR</h1>
         <div className="w-64 h-4 bg-zinc-800 rounded-full overflow-hidden mb-2 border border-zinc-700">
           <div
             className="h-full bg-blue-500 transition-all duration-200 ease-out"
@@ -584,7 +584,7 @@ export default function App() {
             <div className="w-24 h-24 mb-4 rounded-3xl overflow-hidden shadow-2xl shadow-purple-500/20 border border-white/10">
               <img src="https://res.cloudinary.com/diuclq0nb/image/upload/q_auto/f_auto/v1770089934/copy_of_pandora_gradient_portrait_bae3f6.png" alt="Pandora Logo" className="w-full h-full object-cover" crossOrigin="anonymous" />
             </div>
-            <h1 className="text-4xl font-bold text-white mb-1 tracking-tight text-center">THRP AR</h1>
+            <h1 className="text-4xl font-bold text-white mb-1 tracking-tight text-center">Time-Reconstruction Heritage Platform AR </h1>
             <p className="text-zinc-400 text-sm mb-6 text-center font-medium">by Pandora</p>
             <p className="text-zinc-400 mb-8 text-center max-w-xs">Eksplorasi peninggalan prasejarah Bali dalam wujud tiga dimensi.</p>
             
@@ -656,9 +656,9 @@ export default function App() {
           <div className="w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center mb-6">
             <Info size={32} className="text-purple-400" />
           </div>
-          <h2 className="text-3xl font-bold text-white mb-4">About THRP AR</h2>
+          <h2 className="text-3xl font-bold text-white mb-4">About TRHP AR</h2>
           <p className="text-zinc-400 mb-8 text-center max-w-sm leading-relaxed">
-            THRP AR adalah aplikasi Augmented Reality interaktif yang dirancang untuk membantu pengguna memvisualisasikan dan mempelajari bangun ruang tiga dimensi secara langsung di lingkungan sekitar.
+            Time-Reconstruction Heritage Platform AR adalah aplikasi Augmented Reality interaktif yang dirancang untuk membantu pengguna memvisualisasikan dan mempelajari bangun ruang tiga dimensi secara langsung di lingkungan sekitar.
           </p>
           <button
             onClick={() => setCurrentScreen('dashboard')}
