@@ -291,14 +291,22 @@ function MarkerARViewer({
   onClose, 
   setInfoModal,
   handleNextObject,
-  handlePrevObject
+  handlePrevObject,
+  rotationY,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd
 }: { 
   arData: ModelData[], 
   objectIndex: number, 
   onClose: () => void,
   setInfoModal: (info: ModelData | null) => void,
   handleNextObject: () => void,
-  handlePrevObject: () => void
+  handlePrevObject: () => void,
+  rotationY: number,
+  handleTouchStart: (e: any) => void,
+  handleTouchMove: (e: any) => void,
+  handleTouchEnd: () => void
 }) {
   const [qrPos, setQrPos] = useState<{ x: number, y: number, size: number } | null>(null);
   const [isScanning, setIsScanning] = useState(true);
@@ -308,18 +316,33 @@ function MarkerARViewer({
   const videoContainerId = "qr-reader";
 
   useEffect(() => {
-    scannerRef.current = new Html5Qrcode(videoContainerId);
-    
+    // Clean up any existing scanner instance before creating a new one
+    const cleanup = async () => {
+      if (isScannerRunning.current && scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+          isScannerRunning.current = false;
+        } catch (e) {
+          console.warn("Cleanup error:", e);
+        }
+      }
+    };
+
     const startScanner = async () => {
+      await cleanup();
+      
+      const scanner = new Html5Qrcode(videoContainerId);
+      scannerRef.current = scanner;
+      
       try {
-        await scannerRef.current?.start(
+        await scanner.start(
           { facingMode: "environment" },
           {
-            fps: 10,
+            fps: 20,
             qrbox: { width: 250, height: 250 },
+            aspectRatio: window.innerWidth / window.innerHeight
           },
           (decodedText, result: any) => {
-            // Found QR!
             const box = result.decodedResult?.itemSelection;
             if (box) {
               setQrPos({
@@ -359,8 +382,12 @@ function MarkerARViewer({
   }, []);
 
   return (
-    <div className="absolute inset-0 bg-black z-50">
-      <div id={videoContainerId} className="w-full h-full object-cover" />
+    <div className="absolute inset-0 bg-black z-50 overflow-hidden">
+      {/* Camera Container with fixed styling to prevent duplication/split */}
+      <div 
+        id={videoContainerId} 
+        className="absolute inset-0 w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover" 
+      />
       
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 p-6 text-center z-[70]">
@@ -380,20 +407,49 @@ function MarkerARViewer({
         </div>
       )}
 
-      {isScanning && !error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <div className="w-64 h-64 border-2 border-blue-400 rounded-3xl animate-pulse flex items-center justify-center">
-            <Scan size={48} className="text-blue-400 opacity-50" />
+      {/* Top UI Overlay (Matching XR Mode) */}
+      <div className="absolute top-6 left-6 right-6 flex justify-between items-start z-[60] pointer-events-none">
+        <div className="flex flex-col gap-3 pointer-events-auto w-48">
+          <div className="bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-lg">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-semibold text-white uppercase tracking-wider">Status Scan</span>
+              <span className="text-xs font-mono text-zinc-300">{isScanning ? 'Mencari...' : 'Terkunci'}</span>
+            </div>
+            <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 ${isScanning ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}
+                style={{ width: isScanning ? '50%' : '100%' }}
+              />
+            </div>
           </div>
-          <p className="text-white mt-8 font-medium bg-black/50 px-6 py-2 rounded-full backdrop-blur-md">
-            Arahkan kamera ke QR Code AR
-          </p>
         </div>
-      )}
+
+        <button
+          onClick={onClose}
+          className="p-3 bg-red-500/80 backdrop-blur-md rounded-xl text-white shadow-lg pointer-events-auto border border-red-400/30 flex items-center gap-2"
+        >
+          <X size={20} />
+          <span className="text-sm font-medium">Keluar</span>
+        </button>
+      </div>
+
+      {/* Center Instruction (Matching XR Mode) */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full border border-white/20 text-center text-sm max-w-[80%] pointer-events-none shadow-lg z-[60]">
+        {isScanning ? "Arahkan kamera ke QR Code AR" : "QR Terdeteksi! Gunakan panah untuk ganti objek."}
+      </div>
 
       {!isScanning && qrPos && (
-        <div className="absolute inset-0 pointer-events-none">
-          <Canvas className="w-full h-full" camera={{ position: [0, 0, 5], fov: 50 }}>
+        <div className="absolute inset-0 z-10">
+          {/* Touch Area for Rotation */}
+          <div 
+            className="absolute inset-0 z-0 pointer-events-auto"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+          />
+
+          <Canvas className="w-full h-full pointer-events-none" camera={{ position: [0, 0, 5], fov: 50 }}>
             <ambientLight intensity={0.8} />
             <directionalLight position={[10, 10, 10]} intensity={1.5} />
             <Environment preset="city" />
@@ -405,6 +461,7 @@ function MarkerARViewer({
                   0
                 ]}
                 scale={[qrPos.size / 80, qrPos.size / 80, qrPos.size / 80]}
+                rotation={[0, rotationY, 0]}
               >
                 <group position={[0, 0, 0]}>
                   <GLBModel url={arData[objectIndex].file_url} />
@@ -420,11 +477,10 @@ function MarkerARViewer({
                 </mesh>
               </group>
             </Suspense>
-            <OrbitControls enablePan={false} />
           </Canvas>
 
-          {/* Controls Overlay */}
-          <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none">
+          {/* Bottom Controls Overlay (Matching XR Mode) */}
+          <div className="absolute bottom-12 left-0 w-full px-6 flex flex-col items-center gap-4 pointer-events-none z-20">
             <button
               onClick={() => setInfoModal(arData[objectIndex])}
               className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg flex items-center gap-2 pointer-events-auto"
@@ -446,8 +502,11 @@ function MarkerARViewer({
             </div>
             
             <button 
-              onClick={() => setIsScanning(true)}
-              className="mt-4 flex items-center gap-2 text-zinc-400 hover:text-white transition-colors pointer-events-auto"
+              onClick={() => {
+                setIsScanning(true);
+                setQrPos(null);
+              }}
+              className="mt-4 flex items-center gap-2 text-zinc-400 hover:text-white transition-colors pointer-events-auto bg-black/40 px-4 py-1.5 rounded-full backdrop-blur-sm"
             >
               <Scan size={16} />
               <span className="text-xs">Scan Ulang QR</span>
@@ -455,13 +514,6 @@ function MarkerARViewer({
           </div>
         </div>
       )}
-
-      <button
-        onClick={onClose}
-        className="absolute top-6 right-6 p-3 bg-red-500/80 backdrop-blur-md rounded-full text-white shadow-lg pointer-events-auto z-[60]"
-      >
-        <X size={24} />
-      </button>
     </div>
   );
 }
@@ -595,6 +647,10 @@ export default function App() {
           setInfoModal={setInfoModal}
           handleNextObject={handleNextObject}
           handlePrevObject={handlePrevObject}
+          rotationY={rotationY}
+          handleTouchStart={handleTouchStart}
+          handleTouchMove={handleTouchMove}
+          handleTouchEnd={handleTouchEnd}
         />
       )}
 
