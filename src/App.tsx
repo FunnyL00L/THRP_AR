@@ -7,8 +7,9 @@ import { useState, useRef, useEffect, Suspense, Component, ReactNode, useMemo } 
 import { Canvas } from '@react-three/fiber';
 import { XR, createXRStore, useXRHitTest, useXRInputSourceEvent, XRDomOverlay } from '@react-three/xr';
 import { OrbitControls, Environment, Line, useGLTF, useProgress } from '@react-three/drei';
-import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause } from 'lucide-react';
+import { Box, Circle, Triangle, Info, X, ChevronLeft, ChevronRight, HelpCircle, RotateCcw, RotateCw, Bone, Play, Pause, QrCode } from 'lucide-react';
 import * as THREE from 'three';
+import QRScan from './components/QRScan';
 
 // Data Interface
 interface ModelData {
@@ -339,7 +340,7 @@ export default function App() {
   const [readiness, setReadiness] = useState(0);
   const [rotationY, setRotationY] = useState(0);
   const [infoModal, setInfoModal] = useState<ModelData | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar'>('dashboard');
+  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'quiz' | 'about' | 'ar' | 'qr_scan'>('dashboard');
 
   const [isSwiping, setIsSwiping] = useState(false);
   const [touchStartX, setTouchStartX] = useState(0);
@@ -621,6 +622,17 @@ export default function App() {
         </XR>
       </Canvas>
 
+      {currentScreen === 'qr_scan' && (
+        <QRScan 
+          arData={filteredArData}
+          objectIndex={objectIndex}
+          onClose={() => setCurrentScreen('dashboard')}
+          onNext={handleNextObject}
+          onPrev={handlePrevObject}
+          setInfoModal={setInfoModal}
+        />
+      )}
+
       {currentScreen === 'dashboard' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-auto">
           <div className="absolute inset-0 z-0">
@@ -657,36 +669,59 @@ export default function App() {
             </div>
 
             <div className="flex flex-col gap-4 w-64">
-              <button
-                onClick={async () => {
-                  if (isARSupported === false) {
-                    alert("AR tidak didukung di perangkat atau browser ini.");
-                    return;
-                  }
-                  try {
-                    await store.enterAR();
-                    setCurrentScreen('ar');
-                  } catch (err: any) {
-                    console.error("Failed to enter AR:", err);
-                    alert("AR tidak didukung di perangkat ini atau terjadi kesalahan: " + err.message);
-                  }
-                }}
-                disabled={isARSupported === false || !selectedEra || filteredArData.length === 0}
-                className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 ${
-                  isARSupported === false || !selectedEra || filteredArData.length === 0
-                    ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' 
-                    : 'bg-amber-600 hover:bg-amber-700 text-white active:scale-95 shadow-lg shadow-amber-600/25'
-                }`}
-              >
-                <Bone size={20} />
-                {isARSupported === false 
-                  ? 'AR Tidak Didukung' 
-                  : !selectedEra 
-                    ? 'Pilih Era Dulu' 
-                    : filteredArData.length === 0 
-                      ? 'Data Kosong' 
-                      : 'Mulai AR'}
-              </button>
+              {isARSupported === false ? (
+                <button
+                  onClick={() => setCurrentScreen('qr_scan')}
+                  disabled={!selectedEra || filteredArData.length === 0}
+                  className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 ${
+                    !selectedEra || filteredArData.length === 0
+                      ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95 shadow-lg shadow-blue-600/25'
+                  }`}
+                >
+                  <QrCode size={20} />
+                  {!selectedEra ? 'Pilih Era Dulu' : 'Mulai QR Scan'}
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    try {
+                      await store.enterAR();
+                      setCurrentScreen('ar');
+                    } catch (err: any) {
+                      console.error("Failed to enter AR:", err);
+                      alert("AR tidak didukung di perangkat ini atau terjadi kesalahan: " + err.message);
+                    }
+                  }}
+                  disabled={isARSupported === null || !selectedEra || filteredArData.length === 0}
+                  className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 ${
+                    isARSupported === null || !selectedEra || filteredArData.length === 0
+                      ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed' 
+                      : 'bg-amber-600 hover:bg-amber-700 text-white active:scale-95 shadow-lg shadow-amber-600/25'
+                  }`}
+                >
+                  <Bone size={20} />
+                  {isARSupported === null 
+                    ? 'Mengecek Dukungan...' 
+                    : !selectedEra 
+                      ? 'Pilih Era Dulu' 
+                      : filteredArData.length === 0 
+                        ? 'Data Kosong' 
+                        : 'Mulai AR'}
+                </button>
+              )}
+              
+              {isARSupported === true && (
+                <button
+                  onClick={() => setCurrentScreen('qr_scan')}
+                  disabled={!selectedEra || filteredArData.length === 0}
+                  className="w-full bg-zinc-800/80 backdrop-blur-md hover:bg-zinc-700 text-white py-4 rounded-2xl font-semibold transition-all active:scale-95 border border-white/10 flex items-center justify-center gap-2"
+                >
+                  <QrCode size={20} />
+                  Gunakan QR Scan
+                </button>
+              )}
+
               <button
                 onClick={() => setCurrentScreen('about')}
                 className="w-full bg-zinc-800/80 backdrop-blur-md hover:bg-zinc-700 text-white py-4 rounded-2xl font-semibold transition-all active:scale-95 border border-white/10 flex items-center justify-center gap-2"
