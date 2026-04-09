@@ -300,7 +300,7 @@ export default function App() {
   const [isARSupported, setIsARSupported] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch('https://yciekqpamqrehrlfefjx.supabase.co/rest/v1/models?moda_version=eq.512&select=*&apikey=sb_publishable_prXtWKoNjuB9h-wSCgx5nA_ltU8mdZV')
+    fetch('https://yciekqpamqrehrlfefjx.supabase.co/rest/v1/models?moda_version=eq.215&select=*&apikey=sb_publishable_prXtWKoNjuB9h-wSCgx5nA_ltU8mdZV')
       .then(res => res.json())
       .then(data => {
         setArData(data);
